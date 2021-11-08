@@ -12,7 +12,7 @@ namespace TestSign2
         const string fileNameToSign = @"d:\Work\TestSign2\Metadata.inf";
         const string CertificateSerial = "270b8a22000200002475";
         const string ExportedCertificatePath = @"d:\Work\TestSign2\TestDataSign.cer";
-        const string SignatureElementName = "Signature";
+        const string SignatureElementName = "Signature"; 
 
         static void Main(string[] args)
         {
