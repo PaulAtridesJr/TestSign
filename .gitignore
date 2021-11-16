@@ -4,3 +4,5 @@
 /obj
 /TestDataSign.cer
 /OpenSSL
+/private.key
+/public.cer
