@@ -5,141 +5,219 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml.Linq;
 
-namespace TestSign2
+namespace TestSignature
 {
     class Program
-    {
-        const string fileNameToSign = @"d:\Work\TestSign2\Metadata.inf";
-        const string CertificateSerial = "270b8a22000200002475";
-        const string ExportedCertificatePath = @"d:\Work\TestSign2\TestDataSign.cer";
-        const string SignatureElementName = "Signature"; 
-
+    {       
+        const string SignatureElementName = "Signature";       
+       
         static void Main(string[] args)
         {
-            try 
+            string OpenSSLPrivateKeyPath = "";
+            string PublicKeyPath = "";
+            string fileNameToSign = "";
+            string OpenSSLFolder = "";
+            bool UseOpenSSL = true;
+            string CertificateSerial = "";
+            try
             {
-                X509Certificate2 certificateFromStore = GetCertificateFromStore(CertificateSerial);
+                 for(int i = 0; i< args.Length; i++) 
+                 {
+                     if(args[i].StartsWith("/ospriv=")) 
+                     {
+                        OpenSSLPrivateKeyPath = args[i].Substring("/ospriv=".Length);
+                     }
+                     else if (args[i].StartsWith("/pubkey="))
+                     {
+                        PublicKeyPath = args[i].Substring("/pubkey=".Length);
+                     }
+                     else if (args[i].StartsWith("/src="))
+                     {
+                        fileNameToSign = args[i].Substring("/src=".Length);
+                     }
+                     else if (args[i].StartsWith("/ospath="))
+                     {
+                        OpenSSLFolder = args[i].Substring("/ospath=".Length);
+                     }
+                     else if (args[i].StartsWith("/pfx"))
+                     {
+                        UseOpenSSL = false;
+                     }
+                     else if (args[i].StartsWith("/pfxserial="))
+                     {
+                        CertificateSerial =  args[i].Substring("/pfxserial=".Length);
+                     }
+                     else if (args[i].StartsWith("/hlp"))
+                     {
+                        Console.WriteLine($"Using OpenSSL by default{Environment.NewLine}" + 
+                        $"/src=_path_ - file to sign{Environment.NewLine}" +
+                        $"/pubkey=_path_ - exported public key (CER){Environment.NewLine}" + 
+                        $"/pfx - Optional. Use certificate from storage without OpenSSL{Environment.NewLine}" +
+                        $"/ospriv=_path_ - Optional (if OpenSSL). PEM/KEY private key for use with OpenSSL{Environment.NewLine}" + 
+                        $"/pfxserial=_serial_ - Optional (if /pfx). Certificate in storage serial number{Environment.NewLine}" +                                                                     
+                        $"/ospath=_folder_ - Optional (if openssl.exe not in PATH). Folder with OpenSSL binaries {Environment.NewLine}");
+                        return;
+                     }
+                 }
+            }
+            catch (System.Exception ex)
+            {
+                Console.WriteLine($"Failed to parse params - {ex.Message}");                
+            }
 
-                if(certificateFromStore != null) {
-                    Console.WriteLine("Certificate from store asquired");
-                }
+            bool readyToStart = true;
+            if(string.IsNullOrEmpty(fileNameToSign) == true || 
+                File.Exists(fileNameToSign) == false) 
+            {
+                Console.WriteLine("Set source file with param '/src=_path_ to file'. /hlp - to help");
+                readyToStart = false;
+            }
 
-                X509Certificate2 certificateFromRaw = new X509Certificate2();
-                certificateFromRaw.Import(ReadFile(ExportedCertificatePath));
+            if(UseOpenSSL == true) 
+            {
+                if(String.IsNullOrEmpty(OpenSSLPrivateKeyPath) == false &&
+                   File.Exists(OpenSSLPrivateKeyPath) == true &&
+                   String.IsNullOrEmpty(PublicKeyPath) == false &&
+                   File.Exists(PublicKeyPath) == true) 
+                {
+                    readyToStart = true;
+                }   
+                else
+                {
+                    Console.WriteLine("Define OpenSSL private key and public key. /hlp - to help");
+                }             
+            }
+            else
+            {
+                if(String.IsNullOrEmpty(CertificateSerial) == false &&
+                   File.Exists(PublicKeyPath) == true) 
+                {
+                    readyToStart = true;
+                }   
+                else
+                {
+                    Console.WriteLine("Define PFX serial and exported public key. /hlp - to help");
+                }  
+            }
 
-                if(certificateFromRaw != null) {
-                    Console.WriteLine("Certificate from file asquired");
-                }
-
-                if (certificateFromStore != null && certificateFromRaw != null)
-                {                   
-                    // Note that this will return a Basic crypto provider, with only SHA-1 support
-                    var privateKey = (RSACryptoServiceProvider)certificateFromStore.PrivateKey;
-                    // Force use of the Enhanced RSA and AES Cryptographic Provider with openssl-generated SHA256 keys
-                    //var enhCsp = new RSACryptoServiceProvider().CspKeyContainerInfo;
-                    //var cspparams = new CspParameters(enhCsp.ProviderType, enhCsp.ProviderName, privateKey.CspKeyContainerInfo.KeyContainerName);
-                    //privateKey = new RSACryptoServiceProvider(cspparams);
-                    Console.WriteLine("Private key asquired");
-
-                    var publicKey = (RSACryptoServiceProvider)certificateFromRaw.PublicKey.Key;
-                    Console.WriteLine("Public key asquired");
-
-                    byte[] data = File.ReadAllBytes(fileNameToSign); 
-                    byte[] signature = null;
-                    var source_xml = LoadXML(fileNameToSign);
-                    if(source_xml != null)
+            if(readyToStart == true)
+            {    
+                IVerification verification = null;            
+                try 
+                {
+                    if(UseOpenSSL == true) 
                     {
-                        var signature_element = source_xml.Root.Element(SignatureElementName);
-                        if(signature_element != null) 
-                        {   
-                            if(String.IsNullOrEmpty(signature_element.Value) == false) 
-                            {
-                                try
-                                {
-                                    signature = Convert.FromBase64String(signature_element.Value);
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    Console.WriteLine($"Signature is invalid - {ex.Message}");                                    
-                                }                                
-                            }
-                            else
-                            {
-                                Console.WriteLine("Signature element is empty");
-                            }
-                            signature_element.Remove();
-                        }
-
-                        data = Encoding.UTF8.GetBytes(source_xml.ToString());
-                    }  
-                    Console.WriteLine("Source xml received");        
-
-                    if(signature == null) 
-                    {
-                        Console.WriteLine($"File is unsigned. Adding signature ...");
-                        signature = SignXML(data, privateKey);
-                        Console.WriteLine("Source xml signed");   
-                        source_xml.Root.Add(new XElement(SignatureElementName, Convert.ToBase64String(signature)));
-                        SaveXML(source_xml, fileNameToSign);
+                        verification = 
+                            new OpenSSLCertificateHelper(
+                                OpenSSLPrivateKeyPath,
+                                PublicKeyPath,
+                                OpenSSLFolder);
                     }
                     else
                     {
-                         // check data modified
-                        //data[0] += 0x01;
-                        Console.WriteLine("Signature found in xml. Verifying ...");                               
-                        bool verified = VerifyXML(data, signature, publicKey);
-                        Console.WriteLine($"Verification result: {verified}");
-                    }                    
+                        verification = 
+                            new WinCertificateHelper(
+                                CertificateSerial, 
+                                StoreLocation.CurrentUser,
+                                PublicKeyPath);
+                    }
+                                                  
+                        string signature = null;
+                        var source_xml = LoadXML(fileNameToSign);
+                        if(source_xml != null)
+                        {
+                            var signature_element = source_xml.Root.Element(SignatureElementName);
+                            if(signature_element != null) 
+                            {   
+                                if(String.IsNullOrEmpty(signature_element.Value) == false) 
+                                {
+                                    try
+                                    {
+                                        signature = signature_element.Value;
+                                    }
+                                    catch (System.Exception ex)
+                                    {
+                                        Console.WriteLine($"Signature is invalid - {ex.Message}");                                    
+                                    }                                
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Signature element is empty");
+                                }
+                                signature_element.Remove();
+                            }
+
+                            source_xml.Save(fileNameToSign);
+                        }  
+                        Console.WriteLine("Source xml received");        
+
+                        if(signature == null) 
+                        {
+                            Console.WriteLine($"File is unsigned. Adding signature ...");
+                            signature = verification.CreateSignatureForFile(fileNameToSign);
+                            if(signature != null) 
+                            {
+                                Console.WriteLine("Source xml signed");   
+                                source_xml.Root.Add(new XElement(SignatureElementName, signature));
+                                SaveXML(source_xml, fileNameToSign);
+
+                                signature = null;
+                                source_xml = LoadXML(fileNameToSign);
+                                if(source_xml != null)
+                                {
+                                    var signature_element = source_xml.Root.Element(SignatureElementName);
+                                    if(signature_element != null) 
+                                    {   
+                                        if(String.IsNullOrEmpty(signature_element.Value) == false) 
+                                        {
+                                            try
+                                            {
+                                                signature = signature_element.Value;
+                                            }
+                                            catch (System.Exception ex)
+                                            {
+                                                Console.WriteLine($"Signature is invalid - {ex.Message}");                                    
+                                            }                                
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine("Signature element is empty");
+                                        }
+                                        signature_element.Remove();
+                                    }
+
+                                    source_xml.Save(fileNameToSign);
+                                }  
+                                Console.WriteLine("Source xml received");       
+
+                                var data = File.ReadAllBytes(fileNameToSign);
+                                Console.WriteLine("Signature found in xml. Verifying ...");                               
+                                bool verified = verification.VerifyData(data, Convert.FromBase64String(signature));
+                                Console.WriteLine($"Verification result: {verified}");
+                            }
+                        }
+                        else
+                        {
+                            // check data modified
+                            //data[0] += 0x01;
+                            var data = File.ReadAllBytes(fileNameToSign);
+                            Console.WriteLine("Signature found in xml. Verifying ...");                               
+                            bool verified = verification.VerifyData(data, Convert.FromBase64String(signature));
+                            Console.WriteLine($"Verification result: {verified}");
+                        } 
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine($"Ex: {ex}");
                 }
             }
-            catch(Exception ex)
+            else
             {
-                Console.WriteLine($"Ex: {ex}");
+                Console.WriteLine("Run with /hlp - to help");
             }
             Console.ReadLine();
         }
-
-        private static byte[] SignXML(byte[] data, System.Security.Cryptography.RSACryptoServiceProvider csp)
-        {         
-            //return csp.SignData(data, System.Security.Cryptography.CryptoConfig.MapNameToOID("SHA1"));
-            try
-            {
-                RSACryptoServiceProvider RSAalg = new RSACryptoServiceProvider();
-                RSAalg.ImportParameters(csp.ExportParameters(true));
-                return RSAalg.SignData(data, SHA256.Create());  
-            }
-            catch (CryptographicException e)
-            {                
-                 Console.WriteLine($"Failed to sign - {e.Message}");
-                 return null;
-            } 
-        }
-
-        private static bool VerifyXML(byte[] data, byte[] signature, System.Security.Cryptography.RSACryptoServiceProvider csp)
-        {                     
-           // return csp.VerifyData(data, CryptoConfig.MapNameToOID("SHA1"), signature);         
-            try
-            {                
-                return csp.VerifyData(data, SHA256.Create(), signature);
-            }
-            catch (CryptographicException e)
-            {                
-                 Console.WriteLine($"Failed to verify - {e.Message}");
-                 return false;
-            } 
-        }
-
-        internal static byte[] ReadFile (string fileName)
-        {
-            using(FileStream f = new FileStream(fileName, FileMode.Open, FileAccess.Read))
-            {
-                int size = (int)f.Length;
-                byte[] data = new byte[size];
-                size = f.Read(data, 0, size);            
-                return data;
-            }
-        }
-
+        
         internal static XDocument LoadXML(string path)
         {
             try
@@ -167,32 +245,6 @@ namespace TestSign2
                 Console.WriteLine($"Failed to save xml - {ex.Message}");
                 return false;
             }          
-        }
-
-        private static X509Certificate2 GetCertificateFromStore(string certName)
-        {
-
-            // Get the certificate store for the current user.
-            X509Store store = new X509Store(StoreLocation.CurrentUser);
-            try
-            {
-                store.Open(OpenFlags.ReadOnly);
-
-                // Place all certificates in an X509Certificate2Collection object.
-                X509Certificate2Collection certCollection = store.Certificates;
-                // If using a certificate with a trusted root you do not need to FindByTimeValid, instead:
-                // currentCerts.Find(X509FindType.FindBySubjectDistinguishedName, certName, true);
-                X509Certificate2Collection currentCerts = certCollection.Find(X509FindType.FindByTimeValid, DateTime.Now, false);
-                X509Certificate2Collection signingCert = currentCerts.Find(X509FindType.FindBySerialNumber, certName, false);
-                if (signingCert.Count == 0)
-                    return null;
-                // Return the first certificate in the collection, has the right name and is current.
-                return signingCert[0];
-            }
-            finally
-            {
-                store.Close();
-            }
         }
 
     }
