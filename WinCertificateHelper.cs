@@ -23,7 +23,7 @@ namespace TestSignature
             _privateKey = GetCertificateFromStore(_certificateSerial, _storeLocation);
             if(_privateKey == null) 
             {
-                Console.WriteLine("Faield to get private key");
+                Console.WriteLine("Failed to get private key");
             }
             else
             {
@@ -33,7 +33,7 @@ namespace TestSignature
             _publicKey = IOHelper.GetCertificateFromFile(_publicKeyPath);
             if(_publicKey == null) 
             {
-                Console.WriteLine("Faield to get public key");
+                Console.WriteLine("Failed to get public key");
             }
             else
             {
@@ -44,13 +44,13 @@ namespace TestSignature
         byte[] IVerification.CreateSignatureForData(byte[] data)
         {
             if(_privateKey == null) return null;
-            //return csp.SignData(data, System.Security.Cryptography.CryptoConfig.MapNameToOID("SHA1"));
+
             try
             {
                 var csp = (RSACryptoServiceProvider)_privateKey.PrivateKey;
-                RSACryptoServiceProvider RSAalg = new RSACryptoServiceProvider();
-                RSAalg.ImportParameters(csp.ExportParameters(true));
-                return RSAalg.SignData(data, SHA256.Create()); 
+                Console.WriteLine($"ProviderName : {csp.CspKeyContainerInfo.ProviderName}");
+                Console.WriteLine($"ProviderType : {csp.CspKeyContainerInfo.ProviderType}");
+                return csp.SignData(data, SHA512.Create()); 
             }
             catch (CryptographicException e)
             {                
@@ -65,7 +65,7 @@ namespace TestSignature
             try
             {         
                 var csp = (RSACryptoServiceProvider)_publicKey.PublicKey.Key;       
-                return csp.VerifyData(data, SHA256.Create(), signature);
+                return csp.VerifyData(data, SHA512.Create(), signature);
             }
             catch (CryptographicException e)
             {                
@@ -89,8 +89,12 @@ namespace TestSignature
                 // currentCerts.Find(X509FindType.FindBySubjectDistinguishedName, certName, true);
                 X509Certificate2Collection currentCerts = certCollection.Find(X509FindType.FindByTimeValid, DateTime.Now, false);
                 X509Certificate2Collection signingCert = currentCerts.Find(X509FindType.FindBySerialNumber, certificateSerial, false);
-                if (signingCert.Count == 0)
+                if (signingCert.Count == 0) 
+                {
+                    Console.WriteLine($"No certificates with serial '{certificateSerial}' were found in Store '{storeLocation}'");
                     return null;
+                }
+                    
                 // Return the first certificate in the collection, has the right name and is current.
                 return signingCert[0];
             }

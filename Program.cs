@@ -39,14 +39,14 @@ namespace TestSignature
                      {
                         OpenSSLFolder = args[i].Substring("/ospath=".Length);
                      }
-                     else if (args[i].StartsWith("/pfx"))
-                     {
-                        UseOpenSSL = false;
-                     }
                      else if (args[i].StartsWith("/pfxserial="))
                      {
                         CertificateSerial =  args[i].Substring("/pfxserial=".Length);
                      }
+                     else if (args[i].StartsWith("/pfx"))
+                     {
+                        UseOpenSSL = false;
+                     }                    
                      else if (args[i].StartsWith("/hlp"))
                      {
                         Console.WriteLine($"Using OpenSSL by default{Environment.NewLine}" + 
@@ -118,7 +118,7 @@ namespace TestSignature
                         verification = 
                             new WinCertificateHelper(
                                 CertificateSerial, 
-                                StoreLocation.CurrentUser,
+                                StoreLocation.LocalMachine,
                                 PublicKeyPath);
                     }
                                                   
